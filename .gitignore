@@ -1,0 +1,49 @@
+# --- Agent outputs (regenerated on every run) ---
+# Run folders: generated scripts, models, logs, results
+outputs/
+# Parsed specs written by `python src/specification_parser.py`
+*.spec.json
+
+# --- CAD exports ---
+*.step
+*.stp
+*.stl
+*.brep
+*.3mf
+*.dxf
+*.svg
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# --- Virtual environment ---
+.venv/
+.direnv/
+
+# --- Tool caches ---
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# --- Coverage ---
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Secrets / local environment ---
+.env
+.env.*
+practice/
+script.txt
+
+# --- Editors and OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

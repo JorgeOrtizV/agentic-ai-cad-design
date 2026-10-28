@@ -1,0 +1,61 @@
+[project]
+name = "agentic-ai-cad-design"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.12"
+dependencies = [
+    # add your runtime deps here
+    "cadquery>=2.8.0",
+    "matplotlib>=3.11.2",
+    "ollama>=0.6.3",
+    "pydantic>=2.14.1",
+    "pytest>=9.1.1",
+]
+
+[project.optional-dependencies]
+ml = [
+    # optional heavy deps (torch, etc.)
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.14.5",
+    "coverage>=7.13.5",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 144
+src = ["src"]
+
+    [tool.ruff.format]
+    docstring-code-format = true
+
+    [tool.ruff.lint]
+    fixable = ["ALL"]
+    select = ["E", "W", "F", "I", "UP", "B", "SIM", "RUF", "N", "PERF", "PL"]
+    ignore = [
+        "D",       # pydocstyle
+        "T20",     # allow print
+        "ISC001",  # conflicts with formatter
+        "TRY003",
+        "EM",
+    ]
+
+        [tool.ruff.lint.per-file-ignores]
+        "**/tests/**" = ["S101", "ANN", "PLR2004", "SLF001"]
+        "recipes/**" = ["E501"]  # one-line `description:` metadata read by recipe_book
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = ["tests/*"]
+
+[tool.uv]
+environments = ["sys_platform == 'linux'", "sys_platform == 'win32'"]

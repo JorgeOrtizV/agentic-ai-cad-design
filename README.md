@@ -542,37 +542,11 @@ To add a recipe, write `recipes/<name>.py` and run `uv run pytest tests/test_rec
    - **TF-IDF** (`tfidf_scores`): the fallback when the embedding model is not pulled or Ollama cannot be reached. It depends on shared words, so good tags matter.
 4. **Top k.** The k best recipes (default 2, `--recipes`) are used for the whole run and saved in `recipes.json` with their score.
 
-With the current recipes, TF-IDF ranks the expected recipe first for the example specs (wheel spacer → round flange 0.55, next 0.27; bracket → L-bracket 0.74, next 0.13). The scores and the method used are logged at INFO level ("Recipes by embeddings for ..."), so you can compare both on your machine.
+---
 
 ### Prompt budget
 
 The context window is 8192 tokens. A generation prompt with 2 recipes and 12 API cards is about 1.7–2.3k tokens; a repair prompt with the numbered script, problems, causes and trace is about 2.2k. Raising `--recipes` above 3 or 4 starts to crowd out the specification and rules.
-
----
-
-## Configuration
-
-| Setting | Where | Default | CLI flag |
-|---|---|---|---|
-| LLM model | `llm_client.DEFAULT_MODEL` | `qwen2.5-coder:3b` | `--model` |
-| Max length of one answer (tokens) | `llm_client.settings.max_tokens` | 1500 | `--max-tokens` |
-| Max time for one answer (s) | `llm_client.settings.timeout_s` | 300 | `--llm-timeout` |
-| Show answers while generated | `llm_client.settings.stream_to_terminal` | off | `--stream` |
-| Context window (tokens) | `llm_client.settings.context_tokens` | 8192 | n/a |
-| Think-Act-Observe attempts (a round of candidates counts as one) | `main.MAX_ATTEMPTS` | 4 | `--max-attempts` |
-| Candidate scripts per fresh round | `main.CANDIDATES` | 3 | `--candidates` |
-| Repairs without progress before a fresh round | `main.STALL_LIMIT` | 2 | n/a |
-| Stop if the spec has missing values | `run_agent(require_complete=...)` | off | `--require-complete` |
-| Recipes shown to the LLM | `recipe_book.settings.top_k` | 2 | `--recipes` (0 disables) |
-| Embedding model for recipe retrieval | `recipe_book.settings.embedding_model` | `nomic-embed-text` | `--embed-model` |
-| Rank recipes with TF-IDF only | `run_agent(embedder=None)` | off | `--no-embeddings` |
-| API cards in the prompt | `cadquery_api.api_reference(limit=...)`, `CORE_METHODS` | 12 | n/a |
-| Parse retries | `specification_parser.MAX_PARSE_ATTEMPTS` | 3 | n/a |
-| Static-check retries per attempt | `cad_generator.MAX_GENERATION_ATTEMPTS` | 2 | n/a |
-| Allowed imports / forbidden calls | `cad_generator.ALLOWED_IMPORTS`, `FORBIDDEN_CALLS` | `cadquery`, `math` / see stage 2 | n/a |
-| Script execution timeout (s) | `cad_execute.EXECUTION_TIMEOUT_S` | 120 | n/a |
-| Measurement tolerance | `validator.ABS_TOL`, `REL_TOL` | 0.01 mm, 0.1 % | n/a |
-| Ollama server | environment variable `OLLAMA_HOST` | `http://127.0.0.1:11434` | n/a |
 
 Temperatures are fixed in code: 0 for parsing (deterministic extraction); in `cad_generator`, 0.2 for the first candidate and the first try of a repair (`TEMPERATURE`), 0.8 for the other candidates (`CANDIDATE_TEMPERATURE`), and at least 0.7 for retries after a static check failed (`RETRY_TEMPERATURE`).
 
@@ -585,17 +559,6 @@ Temperatures are fixed in code: 0 for parsing (deterministic extraction); in `ca
 - **`run.log`:** always written, at DEBUG level, with every prompt and raw answer.
 - **"The answer was cut at N tokens"** means the model hit `--max-tokens`, usually because it was repeating itself. The truncated script then fails the static checks and is regenerated.
 
-Common situations:
-
-| Symptom | Where to look | Likely cause |
-|---|---|---|
-| `Could not reach the LLM` | n/a | `ollama serve` is not running, or `OLLAMA_HOST` is wrong |
-| First call takes ~1 minute | `run.log` timings | The model is being loaded into memory (cold start) |
-| Parse warnings about ungrounded values | `spec.json` → `warnings` | The model invented a dimension; it should be in `missing_parameters` |
-| `Embedding model 'nomic-embed-text' unavailable ... using TF-IDF` | n/a | Run `ollama pull nomic-embed-text`, or pass `--no-embeddings` to silence it |
-| The prompt shows recipes that do not fit the part | `recipes.json` | Missing recipe for that kind of shape, or weak tags: add or improve a recipe |
-| Same validation errors on every attempt | `attempt_*/log.json` (`diagnosis`, `problem_locations`), `trace.json` | If the blamed lines are right but the diagnosis is not, the model cannot act on it: try a bigger model. If the blamed lines are wrong, improve `build_trace.locate_problems` |
-| Validation passes but the part looks wrong | `result.json` → `validation.unverified` | The feature is not measurable yet (see limitations) |
 
 ---
 
@@ -608,21 +571,6 @@ uv run ruff check src tests recipes
 uv run mypy src --ignore-missing-imports
 ```
 
-| File | Covers | Needs |
-|---|---|---|
-| `tests/fakes.py` | `FakeLLM`: returns canned answers in order and records every conversation it receives | n/a |
-| `test_specification_parser.py` | number extraction, grounding / coverage checks, retries, best-effort result | fake LLM |
-| `test_cad_generator.py` | code extraction, static checks, prompts with recipes and API reference, API errors fixed in the cheap retry, already-tried scripts rejected; repairs: applying, cleaning and rejecting line edits, retries after invalid JSON or broken edits | fake LLM |
-| `test_build_trace.py` | tracing does not change the part; small versions of real failures blamed on the right line: holes filled by a union, holes breaking out of a small body, an extra extrude, cuts and unions with no effect, too many holes, separate solids; trace kept when the script fails | real CadQuery |
-| `test_cadquery_api.py` | invented arguments and methods caught with suggestions (including the real 7B failure), variables, nested chains, Sketch, positional arguments, runtime error explanations, reference cards | real CadQuery API |
-| `test_recipe_book.py` | every recipe: metadata, static checks, builds one valid solid; L-bracket hole count; retrieval ranking (TF-IDF and a fake embedder), embedding cache, fallback when the embedding model is missing | real CadQuery, fake embedder |
-| `test_llm_client.py` | streaming, token / context limits, cut answers, timeout | patched Ollama client |
-| `test_cad_execute.py` | successful export, filtered tracebacks, 2D-only result, missing `result`, timeout, `trace.json` (also on failure), candidate folders | real CadQuery |
-| `test_validator.py` | correct parts pass; wrong hole counts, sizes, extra holes, broken-out cuts, double-listed bores, holes without a diameter in the spec; rounded corners are not holes | real CadQuery |
-| `test_main.py` | full loop end to end: first-try success, best of the candidates kept, line-edit repair guided by the trace, repair of a crash, back to the best part after a worse repair, fresh round after stalled repairs, LLM timeout, `require_complete`, recipes and API reference in the prompt, real signature in runtime API error feedback | fake LLM, real CadQuery |
-
-No test needs Ollama (tests call `run_agent(embedder=None)`, so recipes are ranked with TF-IDF). `pyproject.toml` puts `src/` on the Python path for pytest (`pythonpath = ["src"]`).
-
 ---
 
 ## Known limitations and next steps
@@ -634,5 +582,6 @@ No test needs Ollama (tests call `run_agent(embedder=None)`, so recipes are rank
 - **Parser quality.** A small model can put a feature in the wrong place or list a meaningless missing parameter. The grounding checks catch invented numbers, not wrong structure.
 - **The build trace has no lineage.** It records every geometry-changing call, also on bodies that never reach `result`, and judges "disappeared" or "breaks out" per call. Most scripts build one or two bodies, where this is clear; a script with many scratch bodies gets a noisier trace. Problems the trace cannot see (e.g. a wrong shape with the right size and holes) get no location.
 - **The validator does not check the shape family.** A flat plate passes as an "L-bracket" if the spec has no leg parameters. Hole axes per leg, expected volume per part family, or a critic on the measured summary are next steps.
+- **Improved validator.** A vision model looking at rendered views of the part, or a text critic comparing a measured summary with the original description.
 - **Missing parameters are filled silently by default.** They are marked `# ASSUMED:` in the code and visible in the logs; use `--require-complete` to stop instead. A future version could ask the user.
 - **Not a sandbox.** Generated code runs as normal Python in a subprocess; see stage 3.

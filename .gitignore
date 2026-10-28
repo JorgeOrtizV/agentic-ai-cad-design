@@ -40,6 +40,7 @@ coverage.xml
 .env.*
 practice/
 script.txt
+notes.md
 
 # --- Editors and OS ---
 .vscode/
